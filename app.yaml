@@ -1,0 +1,20 @@
+command: ['streamlit', 'run', 'src/app.py', '--server.port', '8000', '--server.headless', 'true']
+env:
+  - name: ZILLIZ_URI
+    value: ''
+  - name: ZILLIZ_API_KEY
+    value: ''
+  - name: OPENAI_API_KEY
+    value: ''
+  - name: COLLECTION_NAME
+    value: 'book_descriptions'
+  - name: EMBEDDING_MODEL
+    value: 'text-embedding-3-small'
+  - name: EMBEDDING_DIM
+    value: '1536'
+  - name: CHAT_MODEL
+    value: 'gpt-4o-mini'
+  - name: BATCH_SIZE
+    value: '100'
+  - name: PYTHONPATH
+    value: '/app'
