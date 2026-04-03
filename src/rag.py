@@ -4,7 +4,7 @@ from openai import OpenAI
 
 from src.config import CHAT_MODEL, OPENAI_API_KEY
 from src.embeddings import generate_embeddings
-from src.vector_store import get_milvus_client, search_books
+from src.vector_store import get_zilliz_client, search_books
 
 SYSTEM_PROMPT = """\
 You are a helpful book recommendation assistant. You answer questions about books \
@@ -42,13 +42,13 @@ def chat(
         A tuple of (assistant_reply, retrieved_books).
     """
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    milvus_client = get_milvus_client()
+    zilliz_client = get_zilliz_client()
 
     # 1. Embed the user query
     query_embedding = generate_embeddings([user_message], client=openai_client)[0]
 
     # 2. Retrieve relevant books
-    books = search_books(query_embedding, top_k=top_k, client=milvus_client)
+    books = search_books(query_embedding, top_k=top_k, client=zilliz_client)
 
     # 3. Build augmented prompt
     context = build_context(books)

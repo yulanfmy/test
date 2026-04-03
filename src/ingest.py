@@ -4,7 +4,7 @@ from datasets import load_dataset
 
 from src.config import BATCH_SIZE
 from src.embeddings import generate_embeddings, get_openai_client
-from src.vector_store import create_collection, get_milvus_client, insert_batch
+from src.vector_store import create_collection, get_zilliz_client, insert_batch
 
 
 def main() -> None:
@@ -14,10 +14,10 @@ def main() -> None:
     print(f"Loaded {len(dataset)} records.")
 
     openai_client = get_openai_client()
-    milvus_client = get_milvus_client()
+    zilliz_client = get_zilliz_client()
 
     print("Creating collection (if needed)...")
-    create_collection(client=milvus_client)
+    create_collection(client=zilliz_client)
 
     total_inserted = 0
 
@@ -25,8 +25,8 @@ def main() -> None:
         end = min(start + BATCH_SIZE, len(dataset))
         batch = dataset[start:end]
 
-        titles = batch["title"]
-        descriptions = batch["description"]
+        titles = [t[:500] for t in batch["title"]]
+        descriptions = [d[:4000] for d in batch["description"]]
 
         # Combine title + description for richer embeddings
         texts_to_embed = [f"Title: {t}\nDescription: {d}" for t, d in zip(titles, descriptions)]
@@ -36,7 +36,7 @@ def main() -> None:
 
         embeddings = generate_embeddings(texts_to_embed, client=openai_client)
 
-        count = insert_batch(titles, descriptions, embeddings, client=milvus_client)
+        count = insert_batch(titles, descriptions, embeddings, client=zilliz_client)
         total_inserted += count
 
         print(f"  Inserted batch {start}-{end} ({count} rows, total: {total_inserted})")
