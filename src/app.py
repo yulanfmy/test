@@ -1,5 +1,14 @@
 """Streamlit chat UI for the RAG book chatbot."""
 
+import sys
+from pathlib import Path
+
+# Ensure the project root is on sys.path so 'src' is importable
+# regardless of the working directory (e.g. Databricks Apps runtime).
+_project_root = str(Path(__file__).resolve().parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 import streamlit as st
 
 from src.config import OPENAI_API_KEY, ZILLIZ_API_KEY, ZILLIZ_URI
