@@ -22,6 +22,10 @@ build-backend = "setuptools.build_meta"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+builtins = ["spark", "dbutils", "display"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"databricks_affinity_pipeline/notebooks/*.py" = ["E501", "E402"]
