@@ -1,0 +1,214 @@
+{
+  "name": "affinity-enrichment-weekly",
+  "description": "Affinityデータの事業概要カラム自動補完パイプライン - 週次実行",
+  "tags": {
+    "project": "affinity-enrichment",
+    "environment": "demo",
+    "owner": "data-team"
+  },
+  "schedule": {
+    "quartz_cron_expression": "0 0 3 ? * MON",
+    "timezone_id": "Asia/Tokyo",
+    "pause_status": "PAUSED"
+  },
+  "email_notifications": {
+    "on_failure": [],
+    "on_success": [],
+    "no_alert_for_skipped_runs": true
+  },
+  "max_concurrent_runs": 1,
+  "timeout_seconds": 7200,
+  "tasks": [
+    {
+      "task_key": "setup",
+      "description": "テーブル・スキーマの初期セットアップ（初回のみ）",
+      "notebook_task": {
+        "notebook_path": "/Workspace/databricks_affinity_pipeline/notebooks/00_setup"
+      },
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "spark_conf": {
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode"
+        }
+      },
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "generate_sample_data",
+      "description": "サンプルデータ生成（デモ用、初回のみ）",
+      "depends_on": [
+        {"task_key": "setup"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Workspace/databricks_affinity_pipeline/notebooks/01_generate_sample_data",
+        "base_parameters": {
+          "num_companies": "7500",
+          "null_rate": "0.4"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "spark_conf": {
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode"
+        }
+      },
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "extract_null_records",
+      "description": "null事業概要レコードの抽出",
+      "depends_on": [
+        {"task_key": "generate_sample_data"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Workspace/databricks_affinity_pipeline/notebooks/02_extract_null_records",
+        "base_parameters": {
+          "max_companies": "500",
+          "priority_order": "funding_stage"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "spark_conf": {
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode"
+        }
+      },
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "web_search",
+      "description": "外部Web検索APIによる企業情報取得",
+      "depends_on": [
+        {"task_key": "extract_null_records"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Workspace/databricks_affinity_pipeline/notebooks/03_web_search",
+        "base_parameters": {
+          "batch_id": "{{tasks.extract_null_records.result}}",
+          "search_provider": "duckduckgo",
+          "max_results_per_query": "5",
+          "rate_limit_delay": "1.0",
+          "batch_size": "50"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "spark_conf": {
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode"
+        }
+      },
+      "timeout_seconds": 3600
+    },
+    {
+      "task_key": "llm_summarize",
+      "description": "LLMによる事業概要の要約生成",
+      "depends_on": [
+        {"task_key": "web_search"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Workspace/databricks_affinity_pipeline/notebooks/04_llm_summarize",
+        "base_parameters": {
+          "batch_id": "{{tasks.extract_null_records.result}}",
+          "llm_provider": "databricks",
+          "llm_model": "databricks-meta-llama-3-1-70b-instruct",
+          "max_tokens": "500",
+          "temperature": "0.3",
+          "confidence_threshold": "0.7"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "spark_conf": {
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode"
+        }
+      },
+      "timeout_seconds": 3600
+    },
+    {
+      "task_key": "write_back",
+      "description": "企業マスタテーブルへの書き戻し",
+      "depends_on": [
+        {"task_key": "llm_summarize"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Workspace/databricks_affinity_pipeline/notebooks/05_write_back",
+        "base_parameters": {
+          "batch_id": "{{tasks.extract_null_records.result}}",
+          "confidence_threshold": "0.7",
+          "auto_approve": "true"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "spark_conf": {
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode"
+        }
+      },
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "quality_check",
+      "description": "品質チェック・レポート生成",
+      "depends_on": [
+        {"task_key": "write_back"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Workspace/databricks_affinity_pipeline/notebooks/06_quality_check",
+        "base_parameters": {
+          "batch_id": "{{tasks.extract_null_records.result}}",
+          "min_description_length": "20",
+          "max_description_length": "2000"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "spark_conf": {
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode"
+        }
+      },
+      "timeout_seconds": 600
+    }
+  ]
+}
