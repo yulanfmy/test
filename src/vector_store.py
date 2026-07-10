@@ -1,5 +1,7 @@
 """Zilliz vector store operations via REST API."""
 
+import time
+
 import httpx
 
 from src.config import COLLECTION_NAME, EMBEDDING_DIM, ZILLIZ_API_KEY, ZILLIZ_URI
@@ -8,21 +10,41 @@ from src.config import COLLECTION_NAME, EMBEDDING_DIM, ZILLIZ_API_KEY, ZILLIZ_UR
 class ZillizClient:
     """Thin REST client for Zilliz Cloud serverless."""
 
-    def __init__(self, uri: str = ZILLIZ_URI, api_key: str = ZILLIZ_API_KEY) -> None:
+    def __init__(
+        self,
+        uri: str = ZILLIZ_URI,
+        api_key: str = ZILLIZ_API_KEY,
+        timeout: int = 60,
+    ) -> None:
         self.base_url = uri.rstrip("/")
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        self._http = httpx.Client(base_url=self.base_url, headers=self.headers, timeout=60)
+        self._http = httpx.Client(base_url=self.base_url, headers=self.headers, timeout=timeout)
 
-    def _post(self, path: str, payload: dict) -> dict:
-        resp = self._http.post(path, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        if data.get("code") != 0:
-            raise RuntimeError(f"Zilliz API error: {data}")
-        return data
+    def _post(self, path: str, payload: dict, max_retries: int = 3) -> dict:
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self._http.post(path, json=payload)
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status in (408, 429, 502, 503, 504) and attempt < max_retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise
+            except (httpx.TimeoutException, httpx.RequestError):
+                if attempt < max_retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise
+
+            data = resp.json()
+            if data.get("code") != 0:
+                raise RuntimeError(f"Zilliz API error: {data}")
+            return data
+        raise RuntimeError(f"Zilliz API request failed after {max_retries} retries: {path}")
 
     def list_collections(self) -> list[str]:
         data = self._post("/v2/vectordb/collections/list", {})
@@ -81,6 +103,32 @@ class ZillizClient:
             "/v2/vectordb/entities/insert",
             {"collectionName": collection_name, "data": data},
         )
+
+    def query(
+        self,
+        collection_name: str,
+        filter: str,
+        output_fields: list[str],
+        limit: int,
+        offset: int = 0,
+        order_by: list[str] | None = None,
+    ) -> list[dict]:
+        """Query entities by a scalar filter expression."""
+        payload: dict = {
+            "collectionName": collection_name,
+            "filter": filter,
+            "outputFields": output_fields,
+            "limit": limit,
+            "offset": offset,
+        }
+        if order_by:
+            payload["order_by"] = order_by
+        data = self._post("/v2/vectordb/entities/query", payload)
+        return data.get("data", [])
+
+    def drop_collection(self, name: str) -> None:
+        """Drop a collection from Zilliz."""
+        self._post("/v2/vectordb/collections/drop", {"collectionName": name})
 
     def search(
         self,
