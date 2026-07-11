@@ -9,10 +9,10 @@ _project_root = str(Path(__file__).resolve().parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-import streamlit as st
+import streamlit as st  # noqa: E402
 
-from src.config import OPENAI_API_KEY, ZILLIZ_API_KEY, ZILLIZ_URI
-from src.rag import chat
+from src.config import OPENAI_API_KEY, ZILLIZ_API_KEY, ZILLIZ_URI  # noqa: E402
+from src.rag import chat  # noqa: E402
 
 st.set_page_config(page_title="Book Chatbot", page_icon="\U0001f4da", layout="centered")
 
